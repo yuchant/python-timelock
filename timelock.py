@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 DESCRIPTION = """
 Theory:
    Time-lock puzzles and timed-release Crypto (1996)
@@ -7,11 +6,13 @@ Theory:
 
 Modified by Yuji Tomita 2015.
 """
+import datetime
 
 from Crypto.Util import number, randpool
 from Crypto.Cipher import AES
 import sys
 import time
+import argparse
 
 # Init PyCrypto RNG
 rnd = randpool.RandomPool()
@@ -154,8 +155,11 @@ def _new_key_time0(time):
     print "key:", str(key) # Recover the key
     save_puzzle(puzzle)
 
-def _encrypt_file_time0(file, time):
-    msg = open(file).read()
+def _encrypt_file_time0(file, time, value=None):
+    if value is not None:
+        msg = value
+    else:
+        msg = open(file).read()
     try:
         time = int(sys.argv[3]) * SECOND
     except:
@@ -164,8 +168,11 @@ def _encrypt_file_time0(file, time):
     puzzle['ciphertext'] = aes_encode(msg, key)
     save_puzzle(puzzle)
 
-def _pack_file_time0(self, file, time):
-    msg = open(file).read()
+def _pack_file_time0(self, file, time, value=None):
+    if value is not None:
+        msg = value
+    else:
+        msg = open(file).read()
     try:
         time = int(sys.argv[3]) * SECOND
     except:
@@ -187,45 +194,248 @@ def _pack_file_time0(self, file, time):
 def _decode_file(file):
     try:
         puzzle = eval(open(file).read())
-    except:
-        print "Error parsing saved state."
+    except Exception, e:
+        print "Error parsing saved state.", e
         exit(1)
     solution = solve_puzzle(puzzle)
     print >>sys.stderr, "solution =", solution
     if 'ciphertext' in puzzle:
         print aes_decode(puzzle['ciphertext'], solution)
 
-class ArgList(list):
-    def __init__(self, *args):
-        list.__init__(self, *args)
-        self.base = self[0]
-        self.first = self[1]
-        self.second = self[2]
-        self.third = self[3]
 
-    def __getitem__(self, i):
-        if i >= len(self):
-            return None
-        return list.__getitem__(self, i)
+
+# class ArgList(list):
+#     def __init__(self, *args):
+#         list.__init__(self, *args)
+#         self.base = self[0]
+#         self.first = self[1]
+#         self.second = self[2]
+#         self.third = self[3]
+
+#     def __getitem__(self, i):
+#         if i >= len(self):
+#             return None
+#         return list.__getitem__(self, i)
+
+
+
+# def main():
+#     args = ArgList(sys.argv)
+#     if args.first == '-h' or args.first == '--help':
+#         _usage()
+#     elif len(args) == 1 and puzzle:
+#         _unpack()
+#     elif len(args) == 1:
+#         _usage()
+#     elif args.first == '--new':
+#         _new_key_time0(args.second)
+#     elif args.first == '--benchmark':
+#         print "%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS)
+#     elif args.first == '--encrypt':
+#         _encrypt_file_time0(args.second, args.third)
+#     elif args[1] == '--pack':
+#         _pack_file_time0(args.base, args.second, args.third)
+#     else:
+#         _decode_file(args.first)
+
+    # print """Usage: ./timelock.py <PARAM>
+    # --h|help                    display this message
+    # --new [time]                create a sample puzzle with solution time 'time'
+    # --encrypt <file> [time]     encode a file using AES with a random key
+    # --pack <file> [time]        pack a self-decoding file using this script
+    # --benchmark                 print number of operations per second
+    # <saved state>               print puzzle solution to stdout
+
+class Main(object):
+    def __init__(self, args):
+        self.args = args
+        print >> sys.stderr, args
+
+    def execute(self):
+        if self.args.benchmark:
+            self.benchmark()
+        elif self.args.pack:
+            self.pack()
+        elif self.args.seconds_until_date:
+            self.seconds_until_date(self.args.seconds_until_date)
+        elif self.args.encrypt:
+            self.encrypt()
+        elif self.args.decode:
+            _decode_file(self.args.file)
+        else:
+            sys.exit(1)
+
+    def exit(self, msg=''):
+        print >> sys.stderr, u"Exit: %s" % msg
+        sys.exit(1)
+
+    def encrypt(self):
+        """ Encrypt a file now.
+        """
+        _encrypt_file_time0(
+            None,
+            self.get_time_to_decode_seconds(),
+            value=self.get_value_to_encode(),
+        )
+
+
+    def pack(self):
+        """ Pack a self encoding file to stdout.
+        """
+        self_file = sys.argv[0]
+        _pack_file_time0(
+            self_file,
+            None,
+            self.get_time_to_decode_seconds(),
+            value=self.get_value_to_encode(),
+        )
+
+    def get_time_to_decode_seconds(self):
+        """ Get the time the user wishes to take to decode this file.
+        """
+        seconds = self.get_unit() * self.args.time
+        print >> sys.stderr, "Calculated seconds to: %s" % seconds
+        return seconds
+
+    def convert_date_to_seconds(self, date_string):
+        """ Process a date string to seconds.
+        """
+        pass
+
+    def get_unit(self):
+        UNIT_MAP = {
+            'seconds': SECOND,
+            'minutes': MINUTE,
+            'hours': HOUR,
+            'days': DAY,
+            'years': YEAR,
+            'date': self.convert_date_to_seconds,
+        }
+        unit = self.args.unit
+        seconds_per_value = UNIT_MAP[unit]
+        return seconds_per_value
+
+    def seconds_until_date(self, arg):
+        """ Calculate seconds until a date.
+        Common Time Zones for USA.
+            'US/Alaska',
+            'US/Arizona',
+            'US/Central',
+            'US/Eastern',
+            'US/Hawaii',
+            'US/Mountain',
+            'US/Pacific',
+            'UTC',
+        """
+        print >> sys.stderr,'Calculating time until a date %s' % arg
+        try:
+            from dateutil import parser
+            import pytz
+        except ImportError:
+            self.exit("You need to install python-dateutil and pytz to use the date functionality")
+
+        COMMON_TZINFOS = {
+            'PDT': pytz.timezone('US/Pacific'),
+            'PST': pytz.timezone('US/Pacific'),
+            'EST': pytz.timezone('US/Eastern'),
+            'EDT': pytz.timezone('US/Eastern'),
+            'CST': pytz.timezone('US/Central'),
+        }
+        date_format = '%m-%d-%Y %H:%M %Z'
+
+        server_utc = datetime.datetime.now(pytz.utc)
+        print >> sys.stderr, "Server Now UTC: ",  server_utc
+        server_est = server_utc.astimezone(pytz.timezone('US/Eastern'))
+        print >> sys.stderr,  "Server Now EST: ", server_est
+
+        target_date = parser.parse(arg[0])
+        if self.args.tz:
+            try:
+                tz = COMMON_TZINFOS[self.args.tz]
+            except KeyError:
+                tz = pytz.timezone(self.args.tz)
+            target_date_tz = tz.localize(target_date)
+            target_date_utc = target_date_tz.astimezone(pytz.utc)
+        else:
+            proceed = raw_input("No TZ passed. Assuming EST.\n Proceed? y/n")
+            if proceed != 'y':
+                self.exit("Exited")
+            tz = pytz.timezone('US/Eastern')
+            target_date_tz = tz.localize(target_date)
+            target_date_utc = target_date_tz.astimezone(pytz.utc)
+
+        print >> sys.stderr, "Target Date UTC: ", target_date_utc
+        print >> sys.stderr, "Target Date %s: " % tz, target_date_tz
+
+        delta = target_date_tz - server_utc
+        seconds = delta.total_seconds()
+
+        proceed = raw_input("""Time difference is {delta}.
+Seconds: {seconds:.0f}
+Minutes: {minutes:.0f}
+Hours: {hours:.1f}
+Days: {days:.2f}
+Target Unlock Date: {target_date}
+----
+Encrypt? y/n
+            """.format(
+                delta=delta,
+                seconds=seconds,
+                minutes=seconds/MINUTE,
+                hours=seconds/HOUR,
+                days=seconds/DAY,
+                target_date=target_date_tz.strftime('%Y-%m-%d %I:%M:%p %Z'),
+            ))
+        if proceed == 'Y':
+            self.pack(seconds)
+        else:
+            self.exit("Exited due to user input")
+        return seconds
+
+    def get_value_to_encode(self):
+        if self.args.file:
+            with open(self.args.file) as f:
+                return f.read()
+        elif self.args.value:
+            return self.args.value
+        self.exit("No string or file provided to encode")
+
+    def benchmark(self):
+        print "%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS)
+
 
 def main():
-    args = ArgList(sys.argv)
-    if args.first == '-h' or args.first == '--help':
-        _usage()
-    elif len(args) == 1 and puzzle:
+    if puzzle:
+        print >> sys.stderr, 'this is a self decoding file - decoding.'
         _unpack()
-    elif len(args) == 1:
-        _usage()
-    elif args.first == '--new':
-        _new_key_time0(args.second)
-    elif args.first == '--benchmark':
-        print "%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS)
-    elif args.first == '--encrypt':
-        _encrypt_file_time0(args.second, args.third)
-    elif args[1] == '--pack':
-        _pack_file_time0(args.base, args.second, args.third)
-    else:
-        _decode_file(args.first)
+        return
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('value', nargs='?', help="Provide a string to encrypt.")
+    parser.add_argument('-b', '--benchmark', help="Print number of operations per second", required=False, action="store_true")
+    parser.add_argument('-p', '--pack', help="Pack a self decoding python file given a file", required=False, action="store_true")
+    parser.add_argument('-f', '--file', nargs=1, help="Provide a file to encrypt.", required=False)
+    parser.add_argument('-t', '--time', help="Time to decode", required=False, type=int)
+    parser.add_argument('-u', '--unit', help="Time unit to use when interpreting time input", required=False, default='seconds', choices=[
+        'seconds',
+        'minutes',
+        'hours',
+        'days',
+        'months',
+        'years',
+    ])
+    parser.add_argument('-U', '--until', nargs="+", help="Encode until a date", required=False)
+    parser.add_argument('--tz', help="Provide a Time Zone. PST/EST or all of the full codes such as US/Eastern", required=False)
+    parser.add_argument('--seconds-until-date', nargs="+", help="Get seconds until a date", required=False)
+
+    # show help if no args
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    Main(args).execute()
 
 if __name__ == "__main__":
     main()
