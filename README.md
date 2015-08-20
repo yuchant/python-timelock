@@ -16,10 +16,12 @@ Use:
 - pip install python-dateutil
 
 
-	python timelock.py mysecret -U 10PM  # defaults to EST TZ, guided tour.
-	python timelock.py "String to Encrypt" --until-date 10PM
-	python timelock.py "String to Encrypt" -U August 20 2015 10PM --tz US/Pacific # some common TZ short codes available.
-	python timelock.py -f <filename> --pack --time=60 --unit=hours > 60_hours_to_decode.py
-	python timelock.py --encrypt --file=<filename> --time=60
-	python timelock.py --decode <filename> # produced above
+
+
+    python timelock.py mysecret -U 10PM  # defaults to EST TZ, guided tour.
+    python timelock.py "String to Encrypt" --until-date 10PM
+    python timelock.py "String to Encrypt" -U August 20 2015 10PM --tz US/Pacific # some common TZ short codes available.
+    python timelock.py -f <filename> --pack --time=60 --unit=hours > 60_hours_to_decode.py
+    python timelock.py --encrypt --file=<filename> --time=60
+    python timelock.py --decode <filename> # produced above
 
