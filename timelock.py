@@ -161,9 +161,12 @@ def _encrypt_file_time0(file, time, value=None):
     else:
         msg = open(file).read()
     try:
-        time = int(sys.argv[3]) * SECOND
+        time = int(time)
     except:
-        time = 30 * SECOND
+        try:
+            time = int(sys.argv[3]) * SECOND
+        except:
+            time = 30 * SECOND
     (key, puzzle) = makepuzzle(time*SPEED)
     puzzle['ciphertext'] = aes_encode(msg, key)
     save_puzzle(puzzle)
@@ -205,6 +208,7 @@ def _pack_file_time0(self, file, time, value=None, save_to_file=None):
 
 def _decode_file(file):
     try:
+        print "Decoding %s" % file
         puzzle = eval(open(file).read())
     except Exception, e:
         print "Error parsing saved state.", e
@@ -272,6 +276,8 @@ class Main(object):
             self.seconds_until_date(self.args.seconds_until_date or self.args.until_date)
         elif self.args.encrypt:
             self.encrypt()
+        elif self.args.decode:
+            _decode_file(self.args.decode)
         else:
             sys.exit(1)
 
@@ -387,33 +393,28 @@ class Main(object):
         seconds = delta.total_seconds()
 
 
-        default_filename = '__'.join((
-            'target_',
+        default_filename = ''.join((
+            'TARGET__',
             target_date_string.replace(' ', '_').replace(',', ''),
+            ('-%.0fHRS' % (seconds/HOUR)),
             '.py'
         ))
-        proceed = raw_input("""Time difference is {delta}.
+        print >> sys.stderr, """Time difference is {delta}.
 Seconds: {seconds:.0f}
 Minutes: {minutes:.0f}
 Hours: {hours:.1f}
 Days: {days:.2f}
 Target Unlock Date: {target_date}
-----
-Encrypt?
-y/n: """.format(
+""".format(
                 delta=delta,
                 seconds=seconds,
                 minutes=seconds/MINUTE,
                 hours=seconds/HOUR,
                 days=seconds/DAY,
                 target_date=target_date_string
-            ))
-        if proceed == 'y':
-            filename = raw_input("Enter the output file name or leave blank to use %s as the file name:\n" % default_filename)
-            self.pack(seconds, save_to_file=filename or default_filename)
-        else:
-            self.exit("Exited due to user input")
-        return seconds
+        )
+        filename = raw_input("Enter the output file name\nLeave blank to default name:\n%s\n" % default_filename)
+        self.pack(seconds, save_to_file=filename or default_filename)
 
     def get_value_to_encode(self):
         if self.args.file:
@@ -437,9 +438,10 @@ def main():
     parser.add_argument('value', nargs='?', help="Provide a string to encrypt.")
     parser.add_argument('-b', '--benchmark', help="Print number of operations per second", required=False, action="store_true")
     parser.add_argument('-p', '--pack', help="Pack a self decoding python file given a file", required=False, action="store_true")
-    parser.add_argument('-f', '--file', nargs=1, help="Provide a file to encrypt.", required=False)
+    parser.add_argument('-f', '--file', help="Provide a file to encrypt.", required=False)
     parser.add_argument('-t', '--time', help="Time to decode", required=False, type=int)
     parser.add_argument('-e', '--encrypt', help="Encrypt a file that can be unencrypted in X seconds", required=False, action="store_true")
+    parser.add_argument('-d', '--decode', help="Encrypt a file that can be unencrypted in X seconds", required=False)
     parser.add_argument('-u', '--unit', help="Time unit to use when interpreting time input", required=False, default='seconds', choices=[
         'seconds',
         'minutes',
