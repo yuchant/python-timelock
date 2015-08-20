@@ -360,7 +360,11 @@ class Main(object):
         server_est = server_utc.astimezone(pytz.timezone('US/Eastern'))
         print >> sys.stderr,  "Server Now EST: ", server_est
 
-        target_date = parser.parse(arg[0])
+        if len(arg) > 1:
+            arg = u' '.join(arg)
+        else:
+            arg = arg[0]
+        target_date = parser.parse(arg)
         if self.args.tz:
             try:
                 tz = COMMON_TZINFOS[self.args.tz]
@@ -369,22 +373,24 @@ class Main(object):
             target_date_tz = tz.localize(target_date)
             target_date_utc = target_date_tz.astimezone(pytz.utc)
         else:
-            proceed = raw_input("No TZ passed. Assuming EST.\nProceed?\nY/n: ")
-            if proceed != 'Y':
+            proceed = raw_input("No TZ passed. Assuming EST.\nProceed?\ny/n: ")
+            if proceed != 'y':
                 self.exit("Exited")
             tz = pytz.timezone('US/Eastern')
             target_date_tz = tz.localize(target_date)
             target_date_utc = target_date_tz.astimezone(pytz.utc)
-
+        target_date_string = target_date_tz.strftime('%A, %B %Y at %I%p %Z').strip()
         print >> sys.stderr, "Target Date UTC: ", target_date_utc
-        print >> sys.stderr, "Target Date %s: " % tz, target_date_tz
+        print >> sys.stderr, "Target Date %s: " % tz, target_date_string
 
         delta = target_date_tz - server_utc
         seconds = delta.total_seconds()
 
 
         default_filename = '__'.join((
-            server_est.strftime('decoded_at_%Y-%m-%d-%I-%p.py'),
+            'target_',
+            target_date_string.replace(' ', '_').replace(',', ''),
+            '.py'
         ))
         proceed = raw_input("""Time difference is {delta}.
 Seconds: {seconds:.0f}
@@ -394,15 +400,15 @@ Days: {days:.2f}
 Target Unlock Date: {target_date}
 ----
 Encrypt?
-Y/n: """.format(
+y/n: """.format(
                 delta=delta,
                 seconds=seconds,
                 minutes=seconds/MINUTE,
                 hours=seconds/HOUR,
                 days=seconds/DAY,
-                target_date=target_date_tz.strftime('%Y-%m-%d %I:%M:%p %Z'),
+                target_date=target_date_string
             ))
-        if proceed == 'Y':
+        if proceed == 'y':
             filename = raw_input("Enter the output file name or leave blank to use %s as the file name:\n" % default_filename)
             self.pack(seconds, save_to_file=filename or default_filename)
         else:
