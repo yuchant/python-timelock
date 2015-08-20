@@ -168,15 +168,23 @@ def _encrypt_file_time0(file, time, value=None):
     puzzle['ciphertext'] = aes_encode(msg, key)
     save_puzzle(puzzle)
 
-def _pack_file_time0(self, file, time, value=None):
+def _pack_file_time0(self, file, time, value=None, save_to_file=None):
+    if save_to_file is not None:
+        import StringIO
+        stdout = sys.stdout
+        sys.stdout = StringIO.StringIO()
     if value is not None:
         msg = value
     else:
         msg = open(file).read()
+
     try:
-        time = int(sys.argv[3]) * SECOND
+        time = int(time)
     except:
-        time = 30 * SECOND
+        try:
+            time = int(sys.argv[3]) * SECOND
+        except:
+            time = 30 * SECOND
     (key, puzzle) = makepuzzle(time*SPEED)
     puzzle['ciphertext'] = aes_encode(msg, key)
     print "#!/usr/bin/env python"
@@ -190,6 +198,10 @@ def _pack_file_time0(self, file, time, value=None):
     print
     print "puzzle =", puzzle
     print open(self).read()
+    if save_to_file is not None:
+        with open(save_to_file, 'w') as f:
+            f.write(sys.stdout.getvalue())
+            sys.stdout = stdout
 
 def _decode_file(file):
     try:
@@ -256,12 +268,10 @@ class Main(object):
             self.benchmark()
         elif self.args.pack:
             self.pack()
-        elif self.args.seconds_until_date:
-            self.seconds_until_date(self.args.seconds_until_date)
+        elif self.args.seconds_until_date or self.args.until_date:
+            self.seconds_until_date(self.args.seconds_until_date or self.args.until_date)
         elif self.args.encrypt:
             self.encrypt()
-        elif self.args.decode:
-            _decode_file(self.args.file)
         else:
             sys.exit(1)
 
@@ -279,15 +289,17 @@ class Main(object):
         )
 
 
-    def pack(self):
+    def pack(self, seconds=None, save_to_file=None):
         """ Pack a self encoding file to stdout.
         """
         self_file = sys.argv[0]
+        print >> sys.stderr, "Packing... ", seconds, save_to_file
         _pack_file_time0(
             self_file,
             None,
-            self.get_time_to_decode_seconds(),
+            seconds or self.get_time_to_decode_seconds(),
             value=self.get_value_to_encode(),
+            save_to_file=save_to_file,
         )
 
     def get_time_to_decode_seconds(self):
@@ -357,8 +369,8 @@ class Main(object):
             target_date_tz = tz.localize(target_date)
             target_date_utc = target_date_tz.astimezone(pytz.utc)
         else:
-            proceed = raw_input("No TZ passed. Assuming EST.\n Proceed? y/n")
-            if proceed != 'y':
+            proceed = raw_input("No TZ passed. Assuming EST.\nProceed?\nY/n: ")
+            if proceed != 'Y':
                 self.exit("Exited")
             tz = pytz.timezone('US/Eastern')
             target_date_tz = tz.localize(target_date)
@@ -370,6 +382,10 @@ class Main(object):
         delta = target_date_tz - server_utc
         seconds = delta.total_seconds()
 
+
+        default_filename = '__'.join((
+            server_est.strftime('decoded_at_%Y-%m-%d-%I-%p.py'),
+        ))
         proceed = raw_input("""Time difference is {delta}.
 Seconds: {seconds:.0f}
 Minutes: {minutes:.0f}
@@ -377,8 +393,8 @@ Hours: {hours:.1f}
 Days: {days:.2f}
 Target Unlock Date: {target_date}
 ----
-Encrypt? y/n
-            """.format(
+Encrypt?
+Y/n: """.format(
                 delta=delta,
                 seconds=seconds,
                 minutes=seconds/MINUTE,
@@ -387,7 +403,8 @@ Encrypt? y/n
                 target_date=target_date_tz.strftime('%Y-%m-%d %I:%M:%p %Z'),
             ))
         if proceed == 'Y':
-            self.pack(seconds)
+            filename = raw_input("Enter the output file name or leave blank to use %s as the file name:\n" % default_filename)
+            self.pack(seconds, save_to_file=filename or default_filename)
         else:
             self.exit("Exited due to user input")
         return seconds
@@ -416,6 +433,7 @@ def main():
     parser.add_argument('-p', '--pack', help="Pack a self decoding python file given a file", required=False, action="store_true")
     parser.add_argument('-f', '--file', nargs=1, help="Provide a file to encrypt.", required=False)
     parser.add_argument('-t', '--time', help="Time to decode", required=False, type=int)
+    parser.add_argument('-e', '--encrypt', help="Encrypt a file that can be unencrypted in X seconds", required=False, action="store_true")
     parser.add_argument('-u', '--unit', help="Time unit to use when interpreting time input", required=False, default='seconds', choices=[
         'seconds',
         'minutes',
@@ -424,7 +442,7 @@ def main():
         'months',
         'years',
     ])
-    parser.add_argument('-U', '--until', nargs="+", help="Encode until a date", required=False)
+    parser.add_argument('-U', '--until-date', nargs="+", help="Encode until a date", required=False)
     parser.add_argument('--tz', help="Provide a Time Zone. PST/EST or all of the full codes such as US/Eastern", required=False)
     parser.add_argument('--seconds-until-date', nargs="+", help="Get seconds until a date", required=False)
 
