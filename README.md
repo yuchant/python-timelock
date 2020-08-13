@@ -1,5 +1,7 @@
 # Time lock a file on your system clock speed
 
+Sequentially encrypted and not able to be parallel processed. Estimates current CPU speed to determine how many layers of encryption to apply to create a relatively predictable time to decode.
+
 Original code and theory is not mine, but I am modifying to fit my needs.
 
 I am just playing around here and the code is pretty terrible.
