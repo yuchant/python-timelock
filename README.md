@@ -15,6 +15,24 @@ Use:
 - pip install pycryptodome
 - pip install python-dateutil
 
+
+Short example:
+```bash
+python3 timelock.py "Foobar" --encrypt --time=5 --unit=seconds 
+```
+
+It will generate a file such as puzzle_XXXXXXX-X that takes 5 seconds to decode on the current machine.
+
+To decode, run:
+
+```bash
+python3 timelock.py --decode <filename-generated>
+```
+
+
+## More examples:
+
+
 ```bash
 # lock until 3:10PM today in PST. Confirm the seconds (ensure positive)
 python3 timelock.py "MY STRING" -U 3:10PM --tz PST
@@ -28,3 +46,6 @@ python3 timelock.py --decode <filename> # produced above
 
 
 ```
+
+
+

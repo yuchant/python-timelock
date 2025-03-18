@@ -46,7 +46,9 @@ SAVE_INTERVAL = SPEED * 10 * MINUTE
 
 def aes_pad(msg, block_size=16):
     """Pads the message to a multiple of the block size using PKCS7 padding."""
-    pad_len = block_size - (len(msg) % block_size)
+    if isinstance(msg, str):
+        msg = msg.encode()  # Convert string to bytes if needed
+    pad_len = block_size - (len(msg) % block_size)    
     return msg + bytes([pad_len] * pad_len)
 
 def aes_encode(msg, key):
