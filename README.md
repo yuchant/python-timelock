@@ -29,6 +29,44 @@ To decode, run:
 python3 timelock.py --decode <filename-generated>
 ```
 
+## Template to copy/paste
+
+```bash
+python3 timelock.py\
+    "replace with string to encode"\
+    --encrypt\
+    --time=5\
+    --unit=seconds
+python3 timelock.py --decode\
+    <filename>
+```
+
+
+
+## More secure method that won't leave history in bash
+
+To avoid leaving the to-lock text in bash history, use a file instead & delete afterwards.
+
+```bash
+# edit myfile.txt with contents
+python3 timelock.py\
+    -f myfile.txt
+    --encrypt\
+    --time=5\
+    --unit=seconds
+
+# delete file so it's gone for good and not recorded in any logs
+rm myfile.txt
+
+# start decoding the file
+python3 timelock.py --decode -f <puzzle_filename>
+```
+
+
+
+
+
+
 
 ## More examples:
 
