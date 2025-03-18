@@ -16,7 +16,7 @@ Use:
 - pip install python-dateutil
 
 
-Short example:
+## Short usage example:
 ```bash
 python3 timelock.py "Foobar" --encrypt --time=5 --unit=seconds 
 ```
