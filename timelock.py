@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 DESCRIPTION = """
 Theory:
    Time-lock puzzles and timed-release Crypto (1996)
@@ -8,15 +8,14 @@ Modified by Yuji Tomita 2015.
 """
 import datetime
 
-from Crypto.Util import number, randpool
+from Crypto.Util import number
+from Crypto import Random
 from Crypto.Cipher import AES
 import sys
 import time
 import argparse
 
 # Init PyCrypto RNG
-rnd = randpool.RandomPool()
-
 # placeholder variable for packed files
 if not 'puzzle' in locals():
     puzzle = None
@@ -32,10 +31,10 @@ MOD_BITS = 2048 # for time-lock puzzle N
 AES_BITS = 192
 
 def calibrate_speed():
-    p = number.getPrime(MOD_BITS/2, rnd.get_bytes)
-    q = number.getPrime(MOD_BITS/2, rnd.get_bytes)
+    p = number.getPrime(MOD_BITS//2, Random.get_random_bytes)
+    q = number.getPrime(MOD_BITS//2, Random.get_random_bytes)
     N = p*q
-    bignum = number.getRandomNumber(MOD_BITS, rnd.get_bytes)
+    bignum = number.getRandomNBitInteger(MOD_BITS)
     start = time.time()
     trials = 100
     for i in range(trials):
@@ -45,26 +44,28 @@ def calibrate_speed():
 SPEED = calibrate_speed()
 SAVE_INTERVAL = SPEED * 10 * MINUTE
 
-def aes_pad(msg):
-    return msg + (16 - len(msg) % 16) * '\0'
+def aes_pad(msg, block_size=16):
+    """Pads the message to a multiple of the block size using PKCS7 padding."""
+    pad_len = block_size - (len(msg) % block_size)
+    return msg + bytes([pad_len] * pad_len)
 
 def aes_encode(msg, key):
-    return AES.new(number.long_to_bytes(key)).encrypt(aes_pad(msg))
+    return AES.new(number.long_to_bytes(key), AES.MODE_ECB).encrypt(aes_pad(msg))
 
 def aes_decode(ciphertext, key):
-    return AES.new(number.long_to_bytes(key)).decrypt(ciphertext)
+    return AES.new(number.long_to_bytes(key), AES.MODE_ECB).decrypt(ciphertext).rstrip(b'\0').decode('utf-8')
 
 # Routine adapted from Anti-Emulation-through-TimeLock-puzzles
 def makepuzzle(t):
 
     # Generate 512-bit primes
-    p = number.getPrime(MOD_BITS/2, rnd.get_bytes)
-    q = number.getPrime(MOD_BITS/2, rnd.get_bytes)
+    p = number.getPrime(MOD_BITS//2, Random.get_random_bytes)
+    q = number.getPrime(MOD_BITS//2, Random.get_random_bytes)
     N = p*q
     totient = (p-1)*(q-1)
 
-    key = number.getRandomNumber(AES_BITS, rnd.get_bytes)
-    a = number.getRandomNumber(MOD_BITS, rnd.get_bytes) % N
+    key = number.getRandomNBitInteger(AES_BITS)
+    a = number.getRandomNBitInteger(MOD_BITS) % N
 
     e = pow(2, t, totient)
     b = pow(a, e, N)
@@ -92,13 +93,13 @@ def putestimation(outputstream, puzzle):
 
 def save_puzzle(p):
     state = str(p)
-    filename = 'puzzle_%d-%d' % (p['cipher_key'] % 1000000000000, p['steps']/SAVE_INTERVAL)
+    filename = 'puzzle_%d-%d' % (p['cipher_key'] % 1000000000000, p['steps']//SAVE_INTERVAL)
     with open(filename, 'w') as f:
         f.write('# Run ./timelock FILENAME > OUTFILE to decode\n')
         putestimation(f, p)
         f.write('\n')
         f.write(state)
-    print >>sys.stderr, "saved state:", filename
+    print("saved state:", filename, file=sys.stderr)
 
 def solve_puzzle(p):
     tmp, N, t = p['a'], p['N'], p['steps']
@@ -116,33 +117,33 @@ def solve_puzzle(p):
             sys.stderr.write('\r%f squares/s, %d remaining, eta %s \r'
                 % (speed, t-i, eta(t-i, speed)))
         i += 1
-    print >>sys.stderr
+    print(file=sys.stderr)
     return (p['cipher_key'] - tmp) % N
 
 def _unpack():
     solution = solve_puzzle(puzzle)
-    print >>sys.stderr, "solution =", solution
+    print("solution =", solution, file=sys.stderr)
     if 'ciphertext' in puzzle:
         result = aes_decode(puzzle['ciphertext'], solution)
-        print result
+        print(result)
     with open('decoded.txt', 'a') as f:
         f.write(result + "\n")
 
 
 def _usage():
     if puzzle:
-        print """*** This is a self-decoding file ***
+        print("""*** This is a self-decoding file ***
 
 If no parameter is given, the embedded puzzle will be decoded.
-"""
-    print """Usage: ./timelock.py <PARAM>
+""")
+    print("""Usage: ./timelock.py <PARAM>
     --h|help                    display this message
     --new [time]                create a sample puzzle with solution time 'time'
     --encrypt <file> [time]     encode a file using AES with a random key
     --pack <file> [time]        pack a self-decoding file using this script
     --benchmark                 print number of operations per second
     <saved state>               print puzzle solution to stdout
-    """
+    """)
     exit(2)
 
 def _new_key_time0(time):
@@ -150,16 +151,17 @@ def _new_key_time0(time):
         time = int(sys.argv[2]) * SECOND
     except:
         time = 30 * SECOND
-    print "Creating test puzzle with difficulty time %d" % time
+    print("Creating test puzzle with difficulty time %d" % time)
     (key, puzzle) = makepuzzle(time*SPEED)
-    print "key:", str(key) # Recover the key
+    print("key:", str(key)) # Recover the key
     save_puzzle(puzzle)
 
 def _encrypt_file_time0(file, time, value=None):
     if value is not None:
         msg = value
     else:
-        msg = open(file).read()
+        with open(file, 'rb') as f:
+            msg = f.read()
     try:
         time = int(time)
     except:
@@ -173,13 +175,14 @@ def _encrypt_file_time0(file, time, value=None):
 
 def _pack_file_time0(self, file, time, value=None, save_to_file=None):
     if save_to_file is not None:
-        import StringIO
+        from io import StringIO
         stdout = sys.stdout
-        sys.stdout = StringIO.StringIO()
+        sys.stdout = StringIO()
     if value is not None:
         msg = value
     else:
-        msg = open(file).read()
+        with open(file, 'rb') as f:
+            msg = f.read()
 
     try:
         time = int(time)
@@ -190,17 +193,18 @@ def _pack_file_time0(self, file, time, value=None, save_to_file=None):
             time = 30 * SECOND
     (key, puzzle) = makepuzzle(time*SPEED)
     puzzle['ciphertext'] = aes_encode(msg, key)
-    print "#!/usr/bin/env python"
+    print("#!/usr/bin/env python3")
     for line in DESCRIPTION.split('\n'):
-        print "#", line
-    print "# Run this program to recover the original message."
-    print "# (scroll down see the program that generated this file)"
-    print "#"
+        print("#", line)
+    print("# Run this program to recover the original message.")
+    print("# (scroll down see the program that generated this file)")
+    print("#")
     putestimation(sys.stdout, puzzle)
-    print "#"
-    print
-    print "puzzle =", puzzle
-    print open(self).read()
+    print("#")
+    print()
+    print("puzzle =", puzzle)
+    with open(self) as f:
+        print(f.read())
     if save_to_file is not None:
         with open(save_to_file, 'w') as f:
             f.write(sys.stdout.getvalue())
@@ -208,64 +212,21 @@ def _pack_file_time0(self, file, time, value=None, save_to_file=None):
 
 def _decode_file(file):
     try:
-        print "Decoding %s" % file
-        puzzle = eval(open(file).read())
-    except Exception, e:
-        print "Error parsing saved state.", e
+        print("Decoding %s" % file)
+        with open(file) as f:
+            puzzle = eval(f.read())
+    except Exception as e:
+        print("Error parsing saved state.", e)
         exit(1)
     solution = solve_puzzle(puzzle)
-    print >>sys.stderr, "solution =", solution
+    print("solution =", solution, file=sys.stderr)
     if 'ciphertext' in puzzle:
-        print aes_decode(puzzle['ciphertext'], solution)
-
-
-
-# class ArgList(list):
-#     def __init__(self, *args):
-#         list.__init__(self, *args)
-#         self.base = self[0]
-#         self.first = self[1]
-#         self.second = self[2]
-#         self.third = self[3]
-
-#     def __getitem__(self, i):
-#         if i >= len(self):
-#             return None
-#         return list.__getitem__(self, i)
-
-
-
-# def main():
-#     args = ArgList(sys.argv)
-#     if args.first == '-h' or args.first == '--help':
-#         _usage()
-#     elif len(args) == 1 and puzzle:
-#         _unpack()
-#     elif len(args) == 1:
-#         _usage()
-#     elif args.first == '--new':
-#         _new_key_time0(args.second)
-#     elif args.first == '--benchmark':
-#         print "%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS)
-#     elif args.first == '--encrypt':
-#         _encrypt_file_time0(args.second, args.third)
-#     elif args[1] == '--pack':
-#         _pack_file_time0(args.base, args.second, args.third)
-#     else:
-#         _decode_file(args.first)
-
-    # print """Usage: ./timelock.py <PARAM>
-    # --h|help                    display this message
-    # --new [time]                create a sample puzzle with solution time 'time'
-    # --encrypt <file> [time]     encode a file using AES with a random key
-    # --pack <file> [time]        pack a self-decoding file using this script
-    # --benchmark                 print number of operations per second
-    # <saved state>               print puzzle solution to stdout
+        print(aes_decode(puzzle['ciphertext'], solution))
 
 class Main(object):
     def __init__(self, args):
         self.args = args
-        print >> sys.stderr, args
+        print(args, file=sys.stderr)
 
     def execute(self):
         if self.args.benchmark:
@@ -279,10 +240,11 @@ class Main(object):
         elif self.args.decode:
             _decode_file(self.args.decode)
         else:
+            print("Exiting")
             sys.exit(1)
 
     def exit(self, msg=''):
-        print >> sys.stderr, u"Exit: %s" % msg
+        print("Exit: %s" % msg, file=sys.stderr)
         sys.exit(1)
 
     def encrypt(self):
@@ -299,7 +261,7 @@ class Main(object):
         """ Pack a self encoding file to stdout.
         """
         self_file = sys.argv[0]
-        print >> sys.stderr, "Packing... ", seconds, save_to_file
+        print("Packing... ", seconds, save_to_file, file=sys.stderr)
         _pack_file_time0(
             self_file,
             None,
@@ -312,7 +274,7 @@ class Main(object):
         """ Get the time the user wishes to take to decode this file.
         """
         seconds = self.get_unit() * self.args.time
-        print >> sys.stderr, "Calculated seconds to: %s" % seconds
+        print("Calculated seconds to: %s" % seconds, file=sys.stderr)
         return seconds
 
     def convert_date_to_seconds(self, date_string):
@@ -345,7 +307,7 @@ class Main(object):
             'US/Pacific',
             'UTC',
         """
-        print >> sys.stderr,'Calculating time until a date %s' % arg
+        print('Calculating time until a date %s' % arg, file=sys.stderr)
         try:
             from dateutil import parser
             import pytz
@@ -362,12 +324,12 @@ class Main(object):
         date_format = '%m-%d-%Y %H:%M %Z'
 
         server_utc = datetime.datetime.now(pytz.utc)
-        print >> sys.stderr, "Server Now UTC: ",  server_utc
+        print("Server Now UTC: ",  server_utc, file=sys.stderr)
         server_est = server_utc.astimezone(pytz.timezone('US/Eastern'))
-        print >> sys.stderr,  "Server Now EST: ", server_est
+        print("Server Now EST: ", server_est, file=sys.stderr)
 
         if len(arg) > 1:
-            arg = u' '.join(arg)
+            arg = ' '.join(arg)
         else:
             arg = arg[0]
         target_date = parser.parse(arg)
@@ -379,15 +341,15 @@ class Main(object):
             target_date_tz = tz.localize(target_date)
             target_date_utc = target_date_tz.astimezone(pytz.utc)
         else:
-            proceed = raw_input("No TZ passed. Assuming EST.\nProceed?\ny/n: ")
+            proceed = input("No TZ passed. Assuming EST.\nProceed?\ny/n: ")
             if proceed != 'y':
                 self.exit("Exited")
             tz = pytz.timezone('US/Eastern')
             target_date_tz = tz.localize(target_date)
             target_date_utc = target_date_tz.astimezone(pytz.utc)
         target_date_string = target_date_tz.strftime('%A, %B %Y at %I%p %Z').strip()
-        print >> sys.stderr, "Target Date UTC: ", target_date_utc
-        print >> sys.stderr, "Target Date %s: " % tz, target_date_string
+        print("Target Date UTC: ", target_date_utc, file=sys.stderr)
+        print("Target Date %s: " % tz, target_date_string, file=sys.stderr)
 
         delta = target_date_tz - server_utc
         seconds = delta.total_seconds()
@@ -399,7 +361,7 @@ class Main(object):
             ('-%.0fHRS' % (seconds/HOUR)),
             '.py'
         ))
-        print >> sys.stderr, """Time difference is {delta}.
+        print("""Time difference is {delta}.
 Seconds: {seconds:.0f}
 Minutes: {minutes:.0f}
 Hours: {hours:.1f}
@@ -412,25 +374,25 @@ Target Unlock Date: {target_date}
                 hours=seconds/HOUR,
                 days=seconds/DAY,
                 target_date=target_date_string
-        )
-        filename = raw_input("Enter the output file name\nLeave blank to default name:\n%s\n" % default_filename)
+        ), file=sys.stderr)
+        filename = input("Enter the output file name\nLeave blank to default name:\n%s\n" % default_filename)
         self.pack(seconds, save_to_file=filename or default_filename)
 
     def get_value_to_encode(self):
         if self.args.file:
-            with open(self.args.file) as f:
+            with open(self.args.file, 'rb') as f:
                 return f.read()
         elif self.args.value:
             return self.args.value
         self.exit("No string or file provided to encode")
 
     def benchmark(self):
-        print "%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS)
+        print("%d %d-bit modular exponentiations per second" % (SPEED, MOD_BITS))
 
 
 def main():
     if puzzle:
-        print >> sys.stderr, 'this is a self decoding file - decoding.'
+        print('this is a self decoding file - decoding.', file=sys.stderr)
         _unpack()
         return
 
