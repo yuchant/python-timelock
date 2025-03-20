@@ -26,7 +26,7 @@ It will generate a file such as puzzle_XXXXXXX-X that takes 5 seconds to decode 
 To decode, run:
 
 ```bash
-python3 timelock.py --decode <filename-generated>
+python3 timelock.py --decrypt <filename-generated>
 ```
 
 ## Template to copy/paste
@@ -37,7 +37,7 @@ python3 timelock.py\
     --encrypt\
     --time=5\
     --unit=seconds
-python3 timelock.py --decode\
+python3 timelock.py --decrypt\
     <filename>
 ```
 
@@ -59,7 +59,7 @@ python3 timelock.py\
 rm myfile.txt
 
 # start decoding the file
-python3 timelock.py --decode -f <puzzle_filename>
+python3 timelock.py --decrypt -f <puzzle_filename>
 ```
 
 
@@ -80,7 +80,7 @@ python3 timelock.py "String to Encrypt" --until-date 10PM
 python3 timelock.py "String to Encrypt" -U August 20 2015 10PM --tz US/Pacific # some common TZ short codes available.
 python3 timelock.py -f <filename> --pack --time=60 --unit=hours > 60_hours_to_decode.py
 python3 timelock.py --encrypt --file=<filename> --time=60
-python3 timelock.py --decode <filename> # produced above
+python3 timelock.py --decrypt <filename> # produced above
 
 
 ```

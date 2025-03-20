@@ -239,8 +239,8 @@ class Main(object):
             self.seconds_until_date(self.args.seconds_until_date or self.args.until_date)
         elif self.args.encrypt:
             self.encrypt()
-        elif self.args.decode:
-            _decode_file(self.args.decode)
+        elif self.args.decrypt:
+            _decode_file(self.args.decrypt)
         else:
             print("Exiting")
             sys.exit(1)
@@ -405,7 +405,7 @@ def main():
     parser.add_argument('-f', '--file', help="Provide a file to encrypt.", required=False)
     parser.add_argument('-t', '--time', help="Time to decode", required=False, type=int)
     parser.add_argument('-e', '--encrypt', help="Encrypt a file that can be unencrypted in X seconds", required=False, action="store_true")
-    parser.add_argument('-d', '--decode', help="Encrypt a file that can be unencrypted in X seconds", required=False)
+    parser.add_argument('-d', '--decrypt', help="Encrypt a file that can be unencrypted in X seconds", required=False)
     parser.add_argument('-u', '--unit', help="Time unit to use when interpreting time input", required=False, default='seconds', choices=[
         'seconds',
         'minutes',
